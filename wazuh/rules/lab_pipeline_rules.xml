@@ -1,0 +1,32 @@
+<!--
+  Pipeline-/Labtest-Regeln (Home-SIEM, Wazuh 4.14.7)
+  Im Projekt als Block in /var/ossec/etc/rules/local_rules.xml ergänzt.
+
+  Zweck: Nachweis der Kette
+    VPS -> Tailscale -> Vector-Receiver -> cowrie.json -> Wazuh-JSON-Decoder -> Custom-Regel -> Alert
+  BEVOR Cowrie installiert war. Testereignisse hatten eventid "lab.*" und wurden
+  zunächst manuell per `nc`, danach automatisch durch den Vector-Sender verschickt.
+
+  Verifiziert:
+    - wazuh-logtest: Phase 3 -> id '110201', level '5', "**Alert to be generated."
+    - Live-Alert in /var/ossec/logs/alerts/alerts.json mit
+      location "/var/log/honeypot/cowrie.json" und data.@source "cowrie-honeypot"
+      (sowohl für den manuellen nc-Test als auch für den automatischen Vector-Sender-Test)
+
+  Diese Regeln matchen ausschließlich "lab.*" und beeinflussen echte Cowrie-Ereignisse nicht.
+-->
+<group name="honeypot,cowrie,">
+
+  <rule id="110200" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="eventid">^lab\.</field>
+    <description>Honeypot lab event: $(eventid)</description>
+  </rule>
+
+  <rule id="110201" level="5">
+    <if_sid>110200</if_sid>
+    <field name="eventid">^lab\.wazuh\.test$</field>
+    <description>Honeypot Wazuh ingestion test from $(src_ip)</description>
+  </rule>
+
+</group>

@@ -1,0 +1,36 @@
+# Ausschnitt aus /etc/ufw/before.rules  (VPS, IPv4)
+#
+# Process-Level Egress Containment für den Linux-User "cowrie" (UID 1001).
+# Die zwei markierten Zeilen wurden direkt NACH der bestehenden
+# RELATED,ESTABLISHED-Regel der Kette ufw-before-output eingefügt.
+#
+# Wirkung (Reihenfolge ist entscheidend):
+#   1. RELATED,ESTABLISHED  -> ACCEPT
+#        Antworten innerhalb bestehender Verbindungen sind erlaubt:
+#        Angreifer -> Cowrie:22, Cowrie antwortet in derselben Sitzung.
+#   2. UID 1001 (cowrie)    -> REJECT
+#        Jede NEUE ausgehende Verbindung des cowrie-Users wird abgewiesen –
+#        ins Internet ebenso wie zu lokalen Diensten (z. B. 127.0.0.1:22222).
+#   3. Loopback             -> ACCEPT
+#        Für alle anderen Prozesse bleibt Loopback erlaubt (ursprünglich stand diese
+#        Regel VOR der ESTABLISHED-Regel; sie wurde hinter die Cowrie-Sperre verschoben,
+#        damit Cowrie nicht über "lo" auf lokale Dienste pivotieren kann).
+#   4. danach normale UFW-Verarbeitung (ufw-user-output, default allow outgoing)
+#
+# Nicht betroffen: vector, tailscaled, apt, der Admin-User ubuntu.
+# UID prüfen mit: id cowrie   -> uid=1001(cowrie)
+
+# quickly process packets for which we already have a connection
+-A ufw-before-input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ufw-before-output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ufw-before-output -m owner --uid-owner 1001 -j REJECT      # <-- neu: Cowrie darf keine neuen Verbindungen initiieren
+-A ufw-before-output -o lo -j ACCEPT                          # <-- verschoben: Loopback für alle übrigen Prozesse
+-A ufw-before-forward -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+# Aktiver Zustand nach `sudo ufw reload` (verifiziert, auch nach Reboot):
+# $ sudo iptables -S ufw-before-output
+# -N ufw-before-output
+# -A ufw-before-output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+# -A ufw-before-output -m owner --uid-owner 1001 -j REJECT --reject-with icmp-port-unreachable
+# -A ufw-before-output -o lo -j ACCEPT
+# -A ufw-before-output -j ufw-user-output

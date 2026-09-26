@@ -1,0 +1,21 @@
+# Ausschnitt aus /etc/ufw/before6.rules  (VPS, IPv6)
+#
+# Gleiche Logik wie in before.rules, für IPv6 in der Kette ufw6-before-output.
+# Siehe before.rules.snippet für die Erklärung der Reihenfolge.
+
+-A ufw6-before-output -m rt --rt-type 0 -j DROP
+
+# quickly process packets for which we already have a connection
+-A ufw6-before-input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ufw6-before-output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ufw6-before-output -m owner --uid-owner 1001 -j REJECT     # <-- neu
+-A ufw6-before-output -o lo -j ACCEPT                         # <-- verschoben
+-A ufw6-before-forward -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+# Aktiver Zustand (verifiziert, auch nach Reboot):
+# $ sudo ip6tables -S ufw6-before-output | head -n 5
+# -N ufw6-before-output
+# -A ufw6-before-output -m rt --rt-type 0 -j DROP
+# -A ufw6-before-output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+# -A ufw6-before-output -m owner --uid-owner 1001 -j REJECT --reject-with icmp6-port-unreachable
+# -A ufw6-before-output -o lo -j ACCEPT

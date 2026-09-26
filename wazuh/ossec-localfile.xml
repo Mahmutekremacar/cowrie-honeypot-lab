@@ -1,0 +1,20 @@
+<!--
+  Ausschnitt für /var/ossec/etc/ossec.conf  (Home-SIEM, Wazuh-Manager)
+
+  Innerhalb des bestehenden <ossec_config>-Blocks einfügen (vor </ossec_config>),
+  KEINEN zweiten <ossec_config>-Block anlegen.
+  Vorher Backup: cp /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak-before-honeypot
+
+  - log_format json: Wazuh dekodiert jede Zeile mit dem eingebauten JSON-Decoder;
+    Cowrie-Felder (eventid, src_ip, username, password, input, session, ...) werden
+    als eigene Felder (im Index: data.*) verfügbar.
+  - label @source: markiert jedes Ereignis als Honeypot-Telemetrie (erscheint als data.@source).
+
+  Kein Wazuh-Agent, keine Enrollment-Secrets und keine API-Credentials auf dem Honeypot:
+  der Manager liest ausschließlich eine lokale Datei.
+-->
+<localfile>
+  <location>/var/log/honeypot/cowrie.json</location>
+  <log_format>json</log_format>
+  <label key="@source">cowrie-honeypot</label>
+</localfile>

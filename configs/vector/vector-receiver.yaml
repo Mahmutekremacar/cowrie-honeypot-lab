@@ -1,0 +1,45 @@
+# /etc/vector/vector.yaml  (auf dem Home-SIEM-Server)
+#
+# Vector – Receiver
+# Nimmt Cowrie-Ereignisse vom Honeypot entgegen und schreibt sie unverändert
+# (eine JSON-Zeile pro Ereignis) nach /var/log/honeypot/cowrie.json.
+# Diese Datei wird anschließend vom Wazuh-Logcollector (log_format json) gelesen.
+#
+# Sicherheitsrelevante Entscheidungen:
+#   1. address  -> Bind ausschließlich an die Tailscale-IP des Home-Servers,
+#                  NICHT an 0.0.0.0. Der Receiver ist damit weder im LAN noch
+#                  auf anderen Interfaces erreichbar.
+#   2. permit_origin -> Vector akzeptiert nur Verbindungen von der Tailscale-IP
+#                  des Honeypots (/32) – zusätzlich zu Tailscale-Grant und Home-UFW.
+#   3. max_length -> 1 MiB Obergrenze pro Frame gegen übergroße, angreiferkontrollierte Zeilen.
+#   4. bytes + raw_message -> keine Umformung, kein zusätzliches Vector-Wrapping.
+#
+# Verzeichnis: install -d -o vector -g vector -m 0755 /var/log/honeypot
+# Platzhalter: <WAZUH_TAILSCALE_IP>, <HONEYPOT_TAILSCALE_IP>
+
+data_dir: /var/lib/vector
+
+sources:
+  honeypot_tcp:
+    type: socket
+    address: "<WAZUH_TAILSCALE_IP>:6514"
+    mode: tcp
+    permit_origin:
+      - "<HONEYPOT_TAILSCALE_IP>/32"
+    framing:
+      method: newline_delimited
+      newline_delimited:
+        max_length: 1048576
+    decoding:
+      codec: bytes
+
+sinks:
+  honeypot_file:
+    type: file
+    inputs:
+      - honeypot_tcp
+    path: "/var/log/honeypot/cowrie.json"
+    framing:
+      method: newline_delimited
+    encoding:
+      codec: raw_message

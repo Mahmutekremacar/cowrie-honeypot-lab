@@ -1,0 +1,78 @@
+// Tailscale Access Control Policy (Tailnet-Policy, HuJSON)
+//
+// Ausgangslage: Die Default-Policy des Tailnets erlaubte "* -> * : *".
+// Diese Regel wurde ERSETZT, BEVOR der Honeypot-VPS dem Tailnet beigetreten ist.
+//
+// Kernidee:
+//   - Normale, benutzerauthentifizierte Geräte (Laptop, Desktop, Smartphones,
+//     bestehende Server) behalten ihr bisheriges Verhalten (autogroup:member -> *).
+//   - Der VPS tritt mit einem getaggten Auth-Key bei und hat dadurch eine
+//     TAG-Identität (tag:honeypot) statt einer Benutzer-Identität. Er erbt somit
+//     NICHT die breite autogroup:member-Regel.
+//   - Grants sind additiv und deny-by-default: tag:honeypot erhält ausschließlich
+//     tcp:6514 zum Home-SIEM.
+//
+// Auth-Key für den VPS: Reusable OFF, Ephemeral OFF, Pre-approved ON, Tag tag:honeypot.
+// Beitritt ohne Key in der Shell-History:
+//   read -rsp "Tailscale auth key: " TSKEY; echo
+//   sudo tailscale up --auth-key="$TSKEY" --hostname=honeypot-vps
+//   unset TSKEY
+//
+// Platzhalter: <WAZUH_TAILSCALE_IP>
+{
+	// Sprechender Name für den Home-SIEM-Server (Wazuh + Vector-Receiver).
+	"hosts": {
+		"wazuh-home": "<WAZUH_TAILSCALE_IP>",
+	},
+
+	// Nur Tailnet-Admins dürfen den Honeypot-Tag vergeben.
+	"tagOwners": {
+		"tag:honeypot": ["autogroup:admin"],
+	},
+
+	"grants": [
+		// Bisheriges Verhalten für benutzerauthentifizierte Geräte beibehalten.
+		{
+			"src": ["autogroup:member"],
+			"dst": ["*"],
+			"ip":  ["*"],
+		},
+
+		// Der Internet-exponierte Honeypot darf AUSSCHLIESSLICH TCP/6514
+		// zum Log-Receiver auf dem Home-Server initiieren.
+		{
+			"src": ["tag:honeypot"],
+			"dst": ["wazuh-home"],
+			"ip":  ["tcp:6514"],
+		},
+	],
+
+	// Bestehendes Tailscale-SSH-Verhalten für Benutzergeräte (unverändert übernommen).
+	"ssh": [
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+	],
+
+	// Policy-Tests: Tailscale prüft diese Zusicherungen bei jeder Policy-Änderung
+	// und lehnt eine Änderung ab, die sie verletzen würde.
+	"tests": [
+		{
+			"src":   "tag:honeypot",
+			"proto": "tcp",
+			"accept": [
+				"wazuh-home:6514",
+			],
+			"deny": [
+				"wazuh-home:22",    // SSH
+				"wazuh-home:443",   // Wazuh Dashboard
+				"wazuh-home:1514",  // Wazuh Agent-Kommunikation
+				"wazuh-home:1515",  // Wazuh Agent-Enrollment
+				"wazuh-home:55000", // Wazuh API
+			],
+		},
+	],
+}

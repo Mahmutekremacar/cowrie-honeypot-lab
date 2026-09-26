@@ -1,0 +1,51 @@
+# /etc/vector/vector.yaml  (auf dem Honeypot-VPS)
+#
+# Vector 0.58.0 – Sender
+# Liest Cowries JSON-Audit-Log zeilenweise und leitet jede Zeile unverändert
+# (raw_message) per TCP an den Vector-Receiver auf dem Home-Server weiter.
+#
+# Transport: TCP/6514 INNERHALB des Tailscale/WireGuard-Tunnels.
+#            Auf Anwendungsebene ist KEIN TLS konfiguriert – die Verschlüsselung
+#            liefert ausschließlich Tailscale/WireGuard. (Port 6514 wird von nc als
+#            "syslog-tls" angezeigt; das ist nur der IANA-Dienstname des Ports.)
+#
+# Zustellsemantik: Der socket-Sink ist auf Anwendungsebene best-effort (keine
+# End-to-End-Bestätigungen). Der Disk-Buffer puffert Ereignisse, solange der
+# Receiver nicht erreichbar ist, und erhöht damit die Robustheit – er ist aber
+# KEINE garantierte Zustellung.
+#
+# Platzhalter vor dem Einsatz ersetzen: <WAZUH_TAILSCALE_IP>
+
+data_dir: /var/lib/vector
+
+sources:
+  cowrie_json:
+    type: file
+    include:
+      - "/opt/cowrie/var/log/cowrie/cowrie.json"
+    read_from: beginning
+    ignore_not_found: false
+    # Obergrenze pro Zeile: angreiferkontrollierte Eingaben (z. B. sehr lange Kommandos)
+    # sollen den Sender nicht unbegrenzt puffern lassen.
+    max_line_bytes: 1048576
+    # Hinweis: Der file-Source von Vector 0.58 kennt kein "decoding:"-Feld
+    # (führte beim ersten Versuch zu einem Validierungsfehler).
+
+sinks:
+  home_log_receiver:
+    type: socket
+    inputs:
+      - cowrie_json
+    address: "<WAZUH_TAILSCALE_IP>:6514"
+    mode: tcp
+    framing:
+      method: newline_delimited
+    encoding:
+      codec: raw_message
+    buffer:
+      type: disk
+      max_size: 536870912   # 512 MiB lokale Warteschlange
+      when_full: block      # bei vollem Puffer blockieren statt Ereignisse zu verwerfen
+    healthcheck:
+      # Der Home-Server darf zeitweise offline sein, ohne dass Vector den Start verweigert.
+      enabled: false

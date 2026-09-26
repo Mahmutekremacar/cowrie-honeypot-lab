@@ -1,0 +1,23 @@
+# Niemals committen: Schlüssel, Secrets, Rohdaten
+*.key
+*.pem
+id_*
+!id_*.pub
+*.env
+.env*
+authkey*
+tskey*
+
+# Rohe Honeypot-Telemetrie und Artefakte (nur bereinigt in samples/ veröffentlichen)
+cowrie.json
+cowrie.json.*
+*.log
+downloads/
+tty/
+var/
+
+# Unbereinigte Screenshots (Konvention: erst nach Schwärzung nach screenshots/ verschieben)
+screenshots/raw/
+
+# Python
+__pycache__/

@@ -1,0 +1,45 @@
+# /etc/systemd/system/cowrie.service  (VPS)
+#
+# Cowrie als systemd-Dienst, betrieben als unprivilegierter User "cowrie".
+#
+# Warum twistd direkt?
+#   Der erste Versuch "cowrie start -n" scheiterte bei Cowrie 3.0.15 mit
+#   "cowrie: error: unrecognized arguments: -n" (Restart-Schleife, Exit-Code 2).
+#   "-n" (= nicht daemonisieren) ist eine Option von Twisteds twistd, nicht der
+#   Cowrie-CLI. Daher startet systemd twistd direkt im Vordergrund.
+#
+# WorkingDirectory ist zwingend: Cowrie 3.x nutzt das aktuelle Verzeichnis als
+# State-Verzeichnis (etc/cowrie.cfg, var/log/cowrie, var/lib/cowrie).
+#
+# PATH enthält das Virtualenv, damit twistd/cowrie aus /opt/cowrie/cowrie-env
+# gefunden werden (ohne aktiviertes venv: FileNotFoundError beim execvp von twistd).
+#
+# Die Berechtigung für den privilegierten Port 22 kommt aus dem Drop-In
+# cowrie.service.d/override.conf (CAP_NET_BIND_SERVICE).
+
+[Unit]
+Description=Cowrie SSH Honeypot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cowrie
+Group=cowrie
+WorkingDirectory=/opt/cowrie
+
+Environment="PATH=/opt/cowrie/cowrie-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=/opt/cowrie/cowrie-env/bin/twistd -n --umask=0022 --pidfile= --logger cowrie.python.logfile.stdoutLogger cowrie
+
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
