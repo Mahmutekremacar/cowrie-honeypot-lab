@@ -118,7 +118,7 @@ Active: active (running)
 
 ## 5. Live-Internet-Test
 
-**T16** – externer Eigentest mit Fake-Credentials, Kommandos `whoami`, `id`, `uname -a`, `pwd`, `exit`: Wazuh-Alerts `110214` (Level 5, T1059) mit externer Quell-IP (`<ADMIN_PUBLIC_IP>`, nicht `127.0.0.1`). Parallel: unaufgeforderte externe Quelle `ATTACKER-IP-01` mit akzeptiertem Login und Kommando `echo xsec`, ebenfalls als `110214` erkannt.
+**T16** – externer Eigentest mit Fake-Credentials, Kommandos `whoami`, `id`, `uname -a`, `pwd`, `exit`: Wazuh-Alerts `110214` (Level 5, T1059) mit externer Quell-IP (`<ADMIN_PUBLIC_IP>`, nicht `127.0.0.1`). Parallel: unaufgeforderte externe Quelle `ATTACKER-IP-02` (Kampagne K2) mit akzeptiertem Login und Kommando `echo xsec`, ebenfalls als `110214` erkannt.
 
 ## 6. Reboot- und Persistenztests
 
@@ -156,10 +156,20 @@ ESTAB 0 0 <HONEYPOT_TAILSCALE_IP>:46050 <WAZUH_TAILSCALE_IP>:6514 users:(("vecto
 GOOD
 ```
 
-## 7. Nicht (oder nicht isoliert) getestet
+## 7. Validierung im Echtbetrieb (Phase 2)
+
+| Kontrolle | Nachweis aus realer Telemetrie (23.–26.09.2026) |
+|---|---|
+| UID-basierte Egress-Sperre | 7 reale Payload-Downloads (Kampagne K5) endeten als `cowrie.session.file_download.failed`; 0 erfolgreiche Netz-Downloads ([HP-001](../investigations/HP-001.md)) |
+| Keine Weiterleitung | 108 `direct-tcpip`-Anfragen, alle als „discarded“ protokolliert |
+| Pipeline-Stabilität | 128.810 Events vom VPS am Home-Server angekommen, Vector-Verbindung über Tailscale stabil |
+| Regelwerk v1 | Trefferzahlen je Regel ermittelt; Fehler in 110216 und 110219 gefunden ([`../wazuh/logtest/README.md`](../wazuh/logtest/README.md)) |
+| Regelwerk v2 | Modell-Simulation 15/15 Testfälle; Test mit echtem Wazuh über `run-tests.sh` **offen** |
+
+## 8. Nicht (oder nicht isoliert) getestet
 
 - Home-UFW und `permit_origin` bei gelockerter Tailscale-Policy
-- Regeln 110212, 110215–110219 (siehe [`../wazuh/logtest/README.md`](../wazuh/logtest/README.md))
+- Regelwerk v2 mit dem echten Wazuh-Regelwerk (Harness vorhanden) sowie die Korrelationsregel 110219
 - Verhalten des Disk-Buffers bei längerem Ausfall des Home-Servers
 - Log-Rotation von `cowrie.json`
 - Reboot des Home-Servers (Receiver-Bind an Tailscale-IP)

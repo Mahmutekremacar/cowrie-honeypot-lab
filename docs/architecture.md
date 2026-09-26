@@ -71,7 +71,7 @@ sequenceDiagram
     T->>VR: nur tag:honeypot → wazuh-home:6514 erlaubt
     VR->>VR: permit_origin prüfen, Frame ≤ 1 MiB
     VR->>W: Anhängen an /var/log/honeypot/cowrie.json
-    W->>W: JSON-Decoder → Regeln 110210–110219 → MITRE-Mapping
+    W->>W: JSON-Decoder → Regeln 110210–110226 → MITRE-Mapping
     W->>D: Alert in wazuh-alerts-*
 ```
 

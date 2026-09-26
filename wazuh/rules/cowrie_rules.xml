@@ -4,60 +4,65 @@
   Custom-Regeln für Cowrie-Ereignisse, die über Vector nach
   /var/log/honeypot/cowrie.json geliefert und mit log_format=json dekodiert werden.
 
-  ID-Bereich: 110210–110219 (innerhalb des Wazuh-Custom-Bereichs 100000–120000).
-  Ursprünglich geplante IDs ab 100200 kollidierten mit einer bestehenden Regel
-  aus einem früheren Lab ("Rule ID '100200' is duplicated") – daher eigener Bereich 1102xx.
+  ID-Bereich: 110210–110229 (innerhalb des Wazuh-Custom-Bereichs 100000–120000).
 
-  Status (Phase 1):
-    110210  Basis-Klassifikation (level 0, noalert)      -> implizit verifiziert (Kind-Regeln feuern)
-    110211  neue Verbindung                             -> live verifiziert (reale Internet-Quellen)
-    110212  fehlgeschlagene Authentifizierung           -> definiert, im Chat nicht als Alert belegt
-    110213  von Cowrie akzeptierte Authentifizierung    -> live verifiziert
-    110214  Command Input (T1059)                       -> live verifiziert (Tests + reale Quelle)
-    110215  Download-Kommando wget/curl/tftp/ftpget (T1105) -> definiert, noch nicht verifiziert
-    110216  Datei-Download erfasst (T1105)              -> definiert, noch nicht beobachtet
-    110217  Datei-Upload erfasst (T1105)                -> definiert, noch nicht beobachtet
-    110218  nicht unterstütztes Kommando                -> definiert; zugrundeliegende Events beobachtet,
-                                                           Alert nicht explizit belegt
-    110219  wiederholte Fehl-Logins (T1110)             -> definiert, noch nicht verifiziert
+  Version 2 (Phase 2, Detection Tuning auf Basis von ~2,5 Tagen realer Telemetrie):
+    - 110216 matcht nur noch echte Downloads (Feld "url" vorhanden). Vorher zählte die Regel
+      auch per Shell-Umleitung geschriebene Dateien ("Saved redir contents") als Download.
+    - 110219 korreliert jetzt ALLE Login-Versuche (Gruppe cowrie_auth). Cowrie akzeptiert fast
+      jeden Login – Fehl-Logins allein (alte Logik) traten praktisch nie auf.
+    - neu: 110220–110226 (Redirect-Dateien, fehlgeschlagene Downloads, SSH-Tunnel-Versuche,
+      Download-an-Shell, eingebettete Private Keys, chmod +x, System Discovery)
+    - Untergruppen (cowrie_session/auth/command/file/network/correlation) für Dashboards.
+      Da Kind-Regeln den Alert der Elternregel ersetzen, zählt das Dashboard Kommandos über
+      rule.groups:cowrie_command statt über rule.id:110214.
+
+  Kind-Regeln von 110214 werden in Definitionsreihenfolge geprüft; die spezifischste Regel
+  steht zuerst. Ob die Reihenfolge wie erwartet greift, prüft wazuh/logtest/run-tests.sh.
 
   WICHTIG: "cowrie.login.success" bedeutet NICHT, dass ein Angreifer Zugriff auf das
   VPS-Betriebssystem erhalten hat. Cowrie hat lediglich die simulierten Credentials
   akzeptiert und eine EMULIERTE Shell bereitgestellt.
 
-  Passwörter werden bewusst NICHT in Alert-Beschreibungen übernommen ($(password) fehlt absichtlich).
+  Passwörter werden bewusst NICHT in Alert-Beschreibungen übernommen.
 -->
 <group name="honeypot,cowrie,">
 
-  <!-- Basis-Ereignis: nur Klassifikation, kein Alert -->
+  <!-- ===================== Basis ===================== -->
+
   <rule id="110210" level="0" noalert="1">
     <decoded_as>json</decoded_as>
     <field name="eventid" type="pcre2">^cowrie\.</field>
     <description>Cowrie honeypot event</description>
   </rule>
 
-  <!-- Neue SSH-Verbindung -->
+  <!-- ===================== Sitzungen ===================== -->
+
   <rule id="110211" level="3">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.session\.connect$</field>
     <description>Cowrie: New honeypot connection from $(src_ip)</description>
+    <group>cowrie_session,</group>
   </rule>
 
-  <!-- Authentifizierung fehlgeschlagen -->
+  <!-- ===================== Authentifizierung ===================== -->
+
   <rule id="110212" level="4">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.login\.failed$</field>
     <description>Cowrie: Failed authentication from $(src_ip) as $(username)</description>
+    <group>cowrie_auth,</group>
   </rule>
 
-  <!-- Cowrie hat die Credentials akzeptiert: Zugang zur EMULIERTEN Shell -->
   <rule id="110213" level="7">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.login\.success$</field>
     <description>Cowrie: Authentication accepted into honeypot from $(src_ip) as $(username)</description>
+    <group>cowrie_auth,</group>
   </rule>
 
-  <!-- Jede eingegebene Kommandozeile in der emulierten Shell -->
+  <!-- ===================== Kommandos ===================== -->
+
   <rule id="110214" level="5">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.command\.input$</field>
@@ -65,9 +70,36 @@
     <mitre>
       <id>T1059</id>
     </mitre>
+    <group>cowrie_command,</group>
   </rule>
 
-  <!-- Kind-Regel von 110214: typische Payload-Download-Werkzeuge -->
+  <!-- Kind-Regeln von 110214 – spezifischste zuerst -->
+
+  <!-- Eingebetteter privater SSH-Schlüssel, z. B. um Payload per scp vom Staging-Server zu holen -->
+  <rule id="110224" level="10">
+    <if_sid>110214</if_sid>
+    <field name="input" type="pcre2">BEGIN (OPENSSH|RSA|EC|DSA) PRIVATE KEY</field>
+    <description>Cowrie: SSH private key embedded in command from $(src_ip) (key-based payload retrieval)</description>
+    <mitre>
+      <id>T1105</id>
+      <id>T1059.004</id>
+    </mitre>
+    <group>cowrie_command,</group>
+  </rule>
+
+  <!-- Download direkt in eine Shell gepipt -->
+  <rule id="110223" level="10">
+    <if_sid>110214</if_sid>
+    <field name="input" type="pcre2">(?i)\b(wget|curl)\b[^;&amp;]*\|\s*(ba|da|z)?sh\b</field>
+    <description>Cowrie: Download piped to shell by $(src_ip): $(input)</description>
+    <mitre>
+      <id>T1105</id>
+      <id>T1059.004</id>
+    </mitre>
+    <group>cowrie_command,</group>
+  </rule>
+
+  <!-- Typische Download-Werkzeuge -->
   <rule id="110215" level="8">
     <if_sid>110214</if_sid>
     <field name="input" type="pcre2">(?i)\b(wget|curl|tftp|ftpget)\b</field>
@@ -75,19 +107,72 @@
     <mitre>
       <id>T1105</id>
     </mitre>
+    <group>cowrie_command,</group>
   </rule>
 
-  <!-- Cowrie hat einen Download tatsächlich erfasst -->
+  <!-- Datei ausführbar machen (Staging vor Ausführung) -->
+  <rule id="110225" level="6">
+    <if_sid>110214</if_sid>
+    <field name="input" type="pcre2">(?i)\bchmod\s+(\+x|[0-7]?[0-7]*[1357][0-7]*)\b</field>
+    <description>Cowrie: File made executable by $(src_ip)</description>
+    <mitre>
+      <id>T1222.002</id>
+    </mitre>
+    <group>cowrie_command,</group>
+  </rule>
+
+  <!-- System-/Hardware-Aufklärung -->
+  <rule id="110226" level="4">
+    <if_sid>110214</if_sid>
+    <field name="input" type="pcre2">(?i)\b(uname|lspci|lscpu|nproc|whoami|hostnamectl)\b|/proc/(cpuinfo|version|uptime)|/etc/os-release</field>
+    <description>Cowrie: System discovery command from $(src_ip): $(input)</description>
+    <mitre>
+      <id>T1082</id>
+    </mitre>
+    <group>cowrie_command,</group>
+  </rule>
+
+  <rule id="110218" level="4">
+    <if_sid>110210</if_sid>
+    <field name="eventid" type="pcre2">^cowrie\.command\.failed$</field>
+    <description>Cowrie: Unsupported command attempted by $(src_ip): $(input)</description>
+    <group>cowrie_command,</group>
+  </rule>
+
+  <!-- ===================== Dateien ===================== -->
+
+  <!-- Echter Download: nur Events MIT URL -->
   <rule id="110216" level="10">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.session\.file_download$</field>
-    <description>Cowrie: File downloaded into honeypot from $(src_ip), SHA256 $(shasum)</description>
+    <field name="url" type="pcre2">\S</field>
+    <description>Cowrie: File downloaded into honeypot from $(url), SHA256 $(shasum)</description>
     <mitre>
       <id>T1105</id>
     </mitre>
+    <group>cowrie_file,</group>
   </rule>
 
-  <!-- Upload per SCP/SFTP -->
+  <!-- Per Shell-Umleitung (>) geschriebene Datei – Cowrie loggt das ebenfalls als file_download -->
+  <rule id="110220" level="5">
+    <if_sid>110210</if_sid>
+    <field name="eventid" type="pcre2">^cowrie\.session\.file_download$</field>
+    <field name="message" type="pcre2">^Saved redir contents</field>
+    <description>Cowrie: File written via shell redirection by $(src_ip): $(destfile)</description>
+    <group>cowrie_file,</group>
+  </rule>
+
+  <!-- Download gescheitert (bei aktiver Egress-Sperre der Normalfall) -->
+  <rule id="110221" level="8">
+    <if_sid>110210</if_sid>
+    <field name="eventid" type="pcre2">^cowrie\.session\.file_download\.failed$</field>
+    <description>Cowrie: Payload download attempt failed from $(src_ip): $(url)</description>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+    <group>cowrie_file,</group>
+  </rule>
+
   <rule id="110217" level="10">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.session\.file_upload$</field>
@@ -95,23 +180,34 @@
     <mitre>
       <id>T1105</id>
     </mitre>
+    <group>cowrie_file,</group>
   </rule>
 
-  <!-- Kommando, das Cowrie nicht emuliert -->
-  <rule id="110218" level="4">
+  <!-- ===================== Netzwerk ===================== -->
+
+  <!-- SSH-Port-Forwarding (direct-tcpip): Versuch, den Honeypot als Proxy/Tunnel zu nutzen -->
+  <rule id="110222" level="6">
     <if_sid>110210</if_sid>
-    <field name="eventid" type="pcre2">^cowrie\.command\.failed$</field>
-    <description>Cowrie: Unsupported command attempted by $(src_ip): $(input)</description>
+    <field name="eventid" type="pcre2">^cowrie\.direct-tcpip\.request$</field>
+    <description>Cowrie: SSH tunnel/proxy request from $(src_ip) to $(dst_ip):$(dst_port)</description>
+    <mitre>
+      <id>T1090</id>
+    </mitre>
+    <group>cowrie_network,</group>
   </rule>
 
-  <!-- Korrelation: 5 Fehl-Logins derselben Quelle innerhalb von 120 Sekunden -->
-  <rule id="110219" level="8" frequency="5" timeframe="120">
-    <if_matched_sid>110212</if_matched_sid>
+  <!-- ===================== Korrelation ===================== -->
+
+  <!-- 20 Login-Versuche (akzeptiert ODER abgelehnt) derselben Quelle in 5 Minuten.
+       Simulation auf realen Daten (~2,5 Tage): ~540 Treffer bei ~10 Quellen; ignore dämpft Wiederholungen. -->
+  <rule id="110219" level="8" frequency="20" timeframe="300" ignore="600">
+    <if_matched_group>cowrie_auth</if_matched_group>
     <same_field>src_ip</same_field>
-    <description>Cowrie: Repeated authentication attempts from $(src_ip)</description>
+    <description>Cowrie: Automated credential guessing from $(src_ip) (20+ login attempts in 5 min)</description>
     <mitre>
-      <id>T1110</id>
+      <id>T1110.001</id>
     </mitre>
+    <group>cowrie_correlation,</group>
   </rule>
 
 </group>

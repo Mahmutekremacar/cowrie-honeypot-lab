@@ -22,7 +22,9 @@ Dieses Repository dokumentiert einen **produktiv betriebenen** Honeypot. Deshalb
 | `<WAZUH_TAILSCALE_IP>` | Tailscale-IP des Home-SIEM |
 | `<ADMIN_TAILSCALE_IP>` | Tailscale-IP der Admin-Workstation |
 | `<ADMIN_PUBLIC_IP>` | öffentliche IP des eigenen Anschlusses (z. B. bei Eigentests) |
-| `<ATTACKER_IP>` / `ATTACKER-IP-01`, `-02`, … | reale externe Quellen (konsistent pro Quelle nummeriert) |
+| `<ATTACKER_IP>` / `ATTACKER-IP-01`, `-02`, … | reale externe Quellen (in den Berichten nach Kampagne nummeriert) |
+| `ATTACKER-NET-A`, `-B`, … | reale /24-Netze mehrerer Quellen |
+| `STAGING-01`, `-02`, … | Payload-/Staging-Server von Angreifern; URLs zusätzlich entschärft (`hxxp://`) |
 | `<REDACTED_PASSWORD>` | Passwörter / Passwortversuche |
 | `<SENSOR_UUID>`, `<TTYLOG_SHA256>` | Sensor- und Aufzeichnungskennungen |
 | `203.0.113.0/24` | Dokumentationsnetz (RFC 5737) für synthetische Beispiele |
@@ -39,6 +41,7 @@ Dieses Repository dokumentiert einen **produktiv betriebenen** Honeypot. Deshalb
 - Daten werden ausschließlich defensiv ausgewertet.
 - IP-Adressen gelten als personenbezogene Daten im Sinne der DSGVO und werden in öffentlichen Berichten anonymisiert.
 - Erfasste Dateien werden nie ausgeführt und nie in dieses Repository gelegt; veröffentlicht werden höchstens SHA-256, Größe, Dateityp und Zeitpunkt.
+- Von Angreifern mitgebrachte Schlüssel (z. B. SSH-Private-Keys) werden weder veröffentlicht noch verwendet.
 - Keine aktiven Gegenmaßnahmen, keine Scans, keine Kontaktaufnahme mit Quellen.
 
 ## 5. Sicherheitsprobleme melden

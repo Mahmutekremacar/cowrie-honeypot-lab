@@ -46,13 +46,18 @@ Legende: **Geplant** · **Getestet** · **Fehlgeschlagen** · **Korrigiert** · 
 | 23:29 | Reboot-Test 2: Vector `SYN-SENT` über Public-IP | Fehlgeschlagen |
 | 23:30–23:35 | Readiness-Drop-In; Reboot-Test 3: alles grün | Korrigiert / Final verifiziert |
 
-## 24.09.2026 – Beginn Phase 2
+## 24.–26.09.2026 – Phase 2
 
 | Zeit | Schritt | Status |
 |---|---|---|
-| 00:00 | Discover: Cowrie-Felder fehlten in Feldliste → Refresh field list | Korrigiert |
-| 00:07–00:55 | Dashboard „Cowrie Honeypot SOC": 3 KPIs, Connections Over Time, Top Source IPs/Usernames/Passwords/Commands | Teilweise umgesetzt |
-| — | Unique Source IPs, Event Types, Download-KPIs, Recent Activity, MITRE-Panel | Geplant |
+| 24.09. 00:00 | Discover: Cowrie-Felder fehlten in der Feldliste → Refresh field list | Korrigiert |
+| 24.09. 00:07–00:55 | Dashboard „Cowrie Honeypot SOC“: 3 KPIs, Connections Over Time, Top Source IPs/Usernames/Passwords/Commands | Teilweise umgesetzt |
+| 26.09. | Rohdaten (128.810 Events) und Alert-Archive exportiert; Regelzählung zunächst durch doppelt gezählte Tagesdatei verfälscht | Korrigiert |
+| 26.09. | Auswertung: 15.967 Verbindungen, 251 Quellen, Kampagnen K1–K8 | Final verifiziert |
+| 26.09. | Befund: 110216 zählte 772 Shell-Umleitungen als Downloads; gescheiterte Downloads ohne Alert; 110219 wirkungslos | Fehlgeschlagen (Regelwerk v1) |
+| 26.09. | Regelwerk v2 (110216/110219 korrigiert, 110220–110226 neu), Simulation gegen Rohdaten, 15 Testfälle | Getestet (Modell) – Test mit echtem Wazuh offen |
+| 26.09. | Untersuchungen HP-001 bis HP-004, ATT&CK-Mapping, Statistik | Final verifiziert |
+| — | Unique IPs, Event Types, Payload-/MITRE-Panels, Screenshots | Geplant |
 
 ## Endzustand je Komponente
 
@@ -65,4 +70,4 @@ Legende: **Geplant** · **Getestet** · **Fehlgeschlagen** · **Korrigiert** · 
 | Tailscale | `tag:honeypot`, Grant nur `tcp:6514` zu `wazuh-home`, Policy-Tests |
 | Home-UFW | default allow; Honeypot-IP: Allow 6514, Deny Rest |
 | Vector-Receiver | Bind `<WAZUH_TAILSCALE_IP>:6514`, `permit_origin` /32, → `/var/log/honeypot/cowrie.json` |
-| Wazuh | `localfile` json + Label; Regeln 110200/110201 (Lab) und 110210–110219 (Cowrie) |
+| Wazuh | `localfile` json + Label; Regeln 110200/110201 (Lab) und 110210–110226 (Cowrie, Regelwerk v2) |

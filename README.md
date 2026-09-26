@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Status** | Phase 1 (Infrastruktur) abgeschlossen und verifiziert · Phase 2 (Detection Engineering, Analyse, Dashboard) in Arbeit |
+| **Status** | Phase 1 (Infrastruktur) abgeschlossen und verifiziert · Phase 2: Regelwerk v2, vier Untersuchungen und ATT&CK-Mapping erstellt; Dashboard und Screenshots in Arbeit |
 | **Zeitraum Phase 1** | 23.09.2026 (Aufbau, Tests, Live-Schaltung, Reboot-Acceptance-Test) |
 | **Stack** | Ubuntu 24.04.5 LTS · Cowrie 3.0.15 · Vector 0.58.0 · Tailscale 1.102.4 · Wazuh 4.14.7 · UFW/iptables · systemd |
 
@@ -73,7 +73,7 @@ flowchart TB
         HUFW{{"Home-UFW<br/>Honeypot-IP: nur 6514, sonst DENY"}}
         VR["Vector Receiver<br/>Bind nur Tailscale-IP:6514<br/>permit_origin Honeypot /32"]
         HFILE[("/var/log/honeypot/cowrie.json")]
-        WZ["Wazuh Manager<br/>JSON-Decoder · Regeln 110210–110219<br/>MITRE ATT&CK"]
+        WZ["Wazuh Manager<br/>JSON-Decoder · Regeln 110210–110226<br/>MITRE ATT&CK"]
         DB["Wazuh Dashboard<br/>Cowrie Honeypot SOC"]
         HUFW --> VR --> HFILE --> WZ --> DB
     end
@@ -160,7 +160,7 @@ Wazuh liest `/var/log/honeypot/cowrie.json` mit `log_format json` und dem Label 
 
 ### F. Custom Wazuh Rules
 
-Siehe [Detection Engineering](#detection-engineering). Pipeline-Testregeln `110200/110201` bewiesen die Kette VPS → Wazuh-Alert **vor** der Installation von Cowrie; die Cowrie-Regeln `110210–110219` klassifizieren reale Ereignisse.
+Siehe [Detection Engineering](#detection-engineering). Pipeline-Testregeln `110200/110201` bewiesen die Kette VPS → Wazuh-Alert **vor** der Installation von Cowrie; die Cowrie-Regeln `110210–110219` (Regelwerk v1) klassifizieren reale Ereignisse; in Phase 2 zu v2 (`110210–110226`) weiterentwickelt.
 
 ### G. Cowrie-Installation (nativ, nicht Docker)
 
@@ -239,7 +239,7 @@ Beim Reboot-Test nach Einführung der Egress-Regeln zeigte `ss`: `SYN-SENT <HONE
 Nach der Umstellung wurde der Honeypot aus dem Internet erreicht:
 
 - **Kontrollierter Eigentest** von einer externen IP (Windows-Client, Fake-Passwort): `whoami`, `id`, `uname -a`, `pwd`, `exit` → in Wazuh als Regel **110214** (Level 5, **MITRE T1059**) mit externer `src_ip` statt `127.0.0.1`.
-- **Unaufgeforderte reale Aktivität:** Bereits während der Tests zeigte `ss` etablierte Verbindungen externer Quellen auf Cowrie:22. Eine externe Quelle (`ATTACKER-IP-01`) wurde von Cowrie akzeptiert und führte `echo xsec` aus – unabhängig von den Eigentests durch dieselbe Pipeline erkannt.
+- **Unaufgeforderte reale Aktivität:** Bereits während der Tests zeigte `ss` etablierte Verbindungen externer Quellen auf Cowrie:22. Eine externe Quelle (`ATTACKER-IP-02`, Kampagne K2) wurde von Cowrie akzeptiert und führte `echo xsec` aus – unabhängig von den Eigentests durch dieselbe Pipeline erkannt.
 
 ### P. Reboot- / Persistenz-Tests (Acceptance Test Phase 1)
 
@@ -256,29 +256,43 @@ Nach dem finalen Reboot verifiziert ([`scripts/vps-healthcheck.sh`](scripts/vps-
 
 ## Detection Engineering
 
-Regeldatei: [`wazuh/rules/cowrie_rules.xml`](wazuh/rules/cowrie_rules.xml) · Tests: [`wazuh/logtest/`](wazuh/logtest/)
+Regeldatei (Version 2): [`wazuh/rules/cowrie_rules.xml`](wazuh/rules/cowrie_rules.xml) · Regressionstests: [`wazuh/logtest/`](wazuh/logtest/) · ATT&CK-Mapping: [`docs/mitre-mapping.md`](docs/mitre-mapping.md)
 
-| ID | Level | Auslöser (`eventid` / Feld) | MITRE | Status |
-|---|---|---|---|---|
-| 110200 | 3 | `lab.*` (Pipeline-Test) | – | verifiziert (logtest + live) |
-| 110201 | 5 | `lab.wazuh.test` | – | verifiziert (logtest + live, `nc` und Vector-Sender) |
-| 110210 | 0 | `cowrie.*` – Basis, `noalert` | – | implizit verifiziert (Kind-Regeln feuern) |
-| 110211 | 3 | `cowrie.session.connect` | – | **live verifiziert** (reale Internet-Quellen) |
-| 110212 | 4 | `cowrie.login.failed` | – | definiert, nicht als Alert belegt |
-| 110213 | 7 | `cowrie.login.success` (Cowrie-akzeptiert) | – | **live verifiziert** |
-| 110214 | 5 | `cowrie.command.input` | T1059 | **live verifiziert** (Eigentest + reale Quelle) |
-| 110215 | 8 | Kind von 110214: `input` enthält `wget\|curl\|tftp\|ftpget` | T1105 | definiert, noch nicht verifiziert |
-| 110216 | 10 | `cowrie.session.file_download` | T1105 | definiert, noch nicht beobachtet |
-| 110217 | 10 | `cowrie.session.file_upload` | T1105 | definiert, noch nicht beobachtet |
-| 110218 | 4 | `cowrie.command.failed` | – | definiert; Events beobachtet, Alert nicht belegt |
-| 110219 | 8 | 5× 110212 derselben `src_ip` in 120 s | T1110 | definiert, noch nicht verifiziert |
+Version 1 entstand in Phase 1. Version 2 ist das Ergebnis des Detection Tunings in Phase 2 auf Basis von ~2,5 Tagen realer Telemetrie. Die Spalte „Treffer“ zeigt die Anzahl der Events im Zeitraum 23.–26.09.2026: für v1 gezählt aus den Wazuh-Alerts, für neue und geänderte Regeln aus einer Modell-Simulation über die Rohdaten.
+
+| ID | Level | Auslöser | MITRE | Treffer | Status |
+|---|---|---|---|---|---|
+| 110200/110201 | 3/5 | `lab.*` (Pipeline-Test) | – | 4 | verifiziert (logtest + live) |
+| 110210 | 0 | `cowrie.*` – Basis, `noalert` | – | – | verifiziert (Kind-Regeln feuern) |
+| 110211 | 3 | `cowrie.session.connect` | – | 15.979 | **live verifiziert** |
+| 110212 | 4 | `cowrie.login.failed` | – | 46 | **live verifiziert** |
+| 110213 | 7 | `cowrie.login.success` (Cowrie-akzeptiert) | – | 15.461 | **live verifiziert** |
+| 110214 | 5 | `cowrie.command.input` (ohne spezifischere Kind-Regel) | T1059 | 4.615 (v2) | **live verifiziert** |
+| 110215 | 8 | Kind von 110214: `wget\|curl\|tftp\|ftpget` | T1105 | 9 | **live verifiziert** |
+| 110216 | 10 | `file_download` **mit URL** (v2) | T1105 | 0 | v1 war **falsch-positiv** (772 Umleitungen gezählt) → korrigiert |
+| 110217 | 10 | `cowrie.session.file_upload` | T1105 | 3 | **live verifiziert** |
+| 110218 | 4 | `cowrie.command.failed` | – | 772 | **live verifiziert** |
+| 110219 | 8 | ≥ 20 Login-Versuche (Gruppe `cowrie_auth`) derselben `src_ip` in 5 min (v2) | T1110.001 | ~540 (Simulation) | v1 wirkungslos (Cowrie akzeptiert fast alles) → neu definiert |
+| 110220 | 5 | `file_download` per Shell-Umleitung | – | 772 | **neu (v2)** |
+| 110221 | 8 | `cowrie.session.file_download.failed` | T1105 | 7 | **neu (v2)** – vorher unsichtbar |
+| 110222 | 6 | `cowrie.direct-tcpip.request` (Tunnel/Proxy) | T1090 | 108 | **neu (v2)** |
+| 110223 | 10 | Kind von 110214: Download direkt in `sh` gepipt | T1105, T1059.004 | 0¹ | **neu (v2)** |
+| 110224 | 10 | Kind von 110214: privater SSH-Key im Kommando | T1105, T1059.004 | 1 | **neu (v2)** |
+| 110225 | 6 | Kind von 110214: `chmod +x` / ausführbare Rechte | T1222.002 | 1.155 | **neu (v2)** |
+| 110226 | 4 | Kind von 110214: System-Discovery (`uname`, `lspci`, `/proc/cpuinfo` …) | T1082 | 11.092 | **neu (v2)** |
+
+¹ Die einzige passende Session (HP-003) wird von der spezifischeren Regel 110224 übernommen.
+
+> **Status v2:** Die Regeln sind gegen die realen Daten simuliert (Python-Modell der Wazuh-Regelauswertung). Die Bestätigung mit dem echten Wazuh-Regelwerk erfolgt über `wazuh/logtest/run-tests.sh` (15 Testfälle) auf dem Home-SIEM.
 
 **Designentscheidungen:**
 
 - **Eigener ID-Bereich 1102xx:** Die zuerst geplanten IDs `100200/100201` kollidierten mit einer bestehenden Regel eines früheren Labs (`Rule ID '100200' is duplicated`).
-- **Hierarchie über `if_sid`:** Eine Basisregel ohne Alert klassifiziert alle `cowrie.*`-Events; spezifische Kind-Regeln vergeben Level und MITRE-Technik. Da 110215 ein Kind von 110214 ist, erhält ein `wget`-Kommando die höhere Einstufung 110215 statt 110214.
-- **Keine Passwörter in Alert-Beschreibungen:** Cowrie protokolliert versuchte Passwörter; sie bleiben als Feld durchsuchbar, landen aber nicht in Titeln/Beschreibungen.
-- **Test vor Deployment:** Regeln werden mit `wazuh-logtest` geprüft, bevor der Manager neu gestartet wird.
+- **Hierarchie über `if_sid`:** Eine Basisregel ohne Alert klassifiziert alle `cowrie.*`-Events; spezifische Kind-Regeln vergeben Level und MITRE-Technik. Kind-Regeln von 110214 sind nach Spezifität geordnet (Private Key → Download-an-Shell → wget/curl → chmod → Discovery).
+- **Untergruppen** (`cowrie_session`, `cowrie_auth`, `cowrie_command`, `cowrie_file`, `cowrie_network`, `cowrie_correlation`): Da eine Kind-Regel den Alert der Elternregel ersetzt, zählen Dashboards Kommandos über `rule.groups:cowrie_command` statt über `rule.id:110214`.
+- **Tuning aus echten Daten:** Drei der Änderungen stammen direkt aus den Untersuchungen. Umleitungen wurden fälschlich als Download gezählt (HP-002). Gescheiterte Downloads waren unsichtbar (HP-001). Fehl-Logins sind bei Cowries Standardkonfiguration zu selten für eine Brute-Force-Erkennung.
+- **Keine Passwörter in Alert-Beschreibungen:** Sie bleiben als Feld durchsuchbar, landen aber nicht in Titeln und Beschreibungen.
+- **Test vor Deployment:** Jede Regel hat einen Testfall; Änderungen werden vor dem Neustart des Managers mit `wazuh-logtest` geprüft.
 
 ## Security Controls
 
@@ -301,8 +315,8 @@ Regeldatei: [`wazuh/rules/cowrie_rules.xml`](wazuh/rules/cowrie_rules.xml) · Te
 | Gezielte ACLs statt globaler Leserechte | Vector liest nur die Logs | Verifiziert (Events kommen an) |
 | Vector-Disk-Buffer 512 MiB | Überbrückung von Receiver-Ausfällen (keine Zustellgarantie) | Konfiguriert |
 | Vector-Start erst bei Tailscale-Route | Boot-Race verhindern | Verifiziert (Reboot) |
-| Wazuh Custom Rules 110210–110219 | Klassifikation der Honeypot-Aktivität | Teilweise live verifiziert (s. Tabelle oben) |
-| MITRE-ATT&CK-Mapping (T1059, T1105, T1110) | Einordnung in Angriffstechniken | T1059 live verifiziert; T1105/T1110 definiert |
+| Wazuh Custom Rules 110210–110226 (v2) | Klassifikation der Honeypot-Aktivität | v1 live verifiziert; v2 simuliert, Logtest-Harness vorhanden |
+| MITRE-ATT&CK-Mapping | Einordnung beobachteter Aktivität | 6 beobachtete Techniken vollständig, 2 teilweise abgedeckt; Lücken dokumentiert ([`docs/mitre-mapping.md`](docs/mitre-mapping.md)) |
 
 ## Validierung / Tests
 
@@ -332,36 +346,33 @@ Vollständige Testmatrix mit Befehlen und Originalausgaben: [`docs/validation.md
 
 ## Beobachtete Aktivität
 
-> Alle Werte sind anonymisiert bzw. aggregiert. Es werden keine realen Angreifer-IPs, Passwörter oder URLs veröffentlicht.
+> Alle Werte sind anonymisiert bzw. aggregiert. Es werden keine realen Angreifer-IPs, Passwörter oder URLs veröffentlicht. Vollständige Auswertung: [`docs/attack-statistics.md`](docs/attack-statistics.md).
 
-**Momentaufnahme des Dashboards** (Zeitraum „Last 24 hours", wenige Stunden nach Freigabe von TCP/22; enthält auch eine kleine Zahl eigener Testverbindungen):
+**Zeitraum 23.09., 21:02 UTC – 26.09.2026, 09:49 UTC (≈ 61 h), ohne eigene Tests:**
 
 | Kennzahl | Wert |
 |---|---|
-| Verbindungen (`110211`) | 367 |
-| Von Cowrie akzeptierte Logins (`110213`) | 344 |
-| Beobachtete Kommandos (`110214`) | 354 |
+| Verbindungen / Quell-IPs | 15.967 / 251 |
+| Login-Versuche, davon von Cowrie akzeptiert | 15.498 / 15.452 (99,7 %) |
+| Kommandozeilen / davon unterschiedlich | 16.845 / **14** |
+| Client-Kennung `SSH-2.0-Go` | ≈ 97 % |
+| Gescheiterte Payload-Downloads / erfolgreiche | 7 / **0** |
+| SFTP-Uploads | 3 (davon 1 ELF-Binary, 9,8 MB) |
+| SSH-Tunnel-/Proxy-Anfragen | 108 (alle verworfen) |
+| Zeit bis zur ersten fremden Session nach Freigabe von Port 22 | ≈ 25 s |
 
-Qualitative Beobachtungen:
+![Sessions nach Kampagne](docs/img/sessions-by-campaign.png)
 
-- Die Aktivität setzte **unmittelbar nach der Freigabe** von TCP/22 ein.
-- **Zwei externe Quellen** verursachten den Großteil der Verbindungen.
-- Häufigster Benutzername war mit großem Abstand `root`, gefolgt von `ubuntu`.
-- Die Passwortversuche folgten erwartbaren Mustern schwacher Standardpasswörter (Werte nicht veröffentlicht).
-- Das mit Abstand häufigste Kommando war `echo xsec`. *Hypothese (in Phase 2 zu prüfen):* ein automatisierter Check, ob Kommandoausführung in der Shell funktioniert – typisch für Bots vor weiteren Schritten.
+**Untersuchte Fälle** ([`investigations/`](investigations/)):
 
-Beispiel eines Alerts (anonymisiert):
+| Bericht | Kampagne | Kern |
+|---|---|---|
+| [HP-001](investigations/HP-001.md) | K5 | GPU-Suche + `curl` + `perl` – alle 7 Downloads scheiterten (Egress-Sperre aktiv); deckte eine Sichtbarkeitslücke im Regelwerk auf |
+| [HP-002](investigations/HP-002.md) | K3 | verteiltes Inventur-Skript, das das Shell-Verhalten testet (mutmaßlich Honeypot-Erkennung); deckte Falsch-Positive bei „Downloads“ auf |
+| [HP-003](investigations/HP-003.md) | K6 | Dropper mit eingebettetem SSH-Private-Key und `scp`-Transfer, HTTPS-Fallback direkt in `sh` |
+| [HP-004](investigations/HP-004.md) | K8 | SFTP-Upload eines ELF-Binaries getarnt als `sshd`, ohne ein einziges Shell-Kommando |
 
-```text
-rule.id: 110214 · rule.level: 5 · rule.mitre.id: T1059
-data.eventid: cowrie.command.input
-data.src_ip: ATTACKER-IP-01
-data.username: root
-data.input: echo xsec
-location: /var/log/honeypot/cowrie.json
-```
-
-Eine systematische Session-Analyse mit IoCs und ATT&CK-Mapping ist Teil von Phase 2 ([`investigations/`](investigations/)).
+**Wirkung der Eindämmung:** Kein Angreifer konnte eine Payload nachladen, keine Tunnelanfrage wurde weitergeleitet, und kein hochgeladenes Binary wurde ausgeführt.
 
 ## Troubleshooting & Lessons Learned
 
@@ -378,6 +389,8 @@ Ausführlich: [`docs/troubleshooting.md`](docs/troubleshooting.md) und [`docs/le
 | Cowrie-Felder fehlen in der Dashboard-Feldliste | veralteter Index-Pattern-Cache | *Refresh field list* |
 | DQL-Fehler im Visualize-Editor | Query-Parser lehnte `rule.id:110211` ab | *Add filter* bei leerer Query |
 | Befehle auf dem falschen Host ausgeführt | ähnliche Prompts/uneindeutige Hostnamen | Prompt vor jedem Schritt prüfen; Hostnamen eindeutig benennen |
+| 772 „Downloads“ ohne einen echten Download | Cowrie loggt Shell-Umleitungen als `file_download` | Regel 110216 prüft `url`, neue Regel 110220 |
+| Regelzählung zu hoch (18.441 statt 15.979) | aktuelle Tagesdatei doppelt gezählt (Archiv + `alerts.json`) | Zählungen gegen Rohdaten plausibilisieren |
 
 ## Bekannte Einschränkungen
 
@@ -395,19 +408,17 @@ Ehrlich dokumentierte offene Punkte (nicht Teil der verifizierten Phase-1-Aussag
 
 ## Phase 2 – Detection Engineering, Threat Analysis und SOC Dashboarding
 
-> **Noch nicht abgeschlossen.** Die folgenden Punkte sind geplant bzw. teilweise begonnen. Details: [`docs/roadmap-phase2.md`](docs/roadmap-phase2.md).
+> **Status: in Arbeit.** Details und offene Punkte: [`docs/roadmap-phase2.md`](docs/roadmap-phase2.md).
 
-**A. Wazuh-Dashboard „Cowrie Honeypot SOC" (begonnen)** – vorhanden: Total Connections, Successful Cowrie Logins, Commands Observed, Connections Over Time, Top Source IPs, Top Usernames, Top Passwords, Top Commands. Geplant: Unique Source IPs, Event Types, Download Commands, Files Downloaded, Recent Attacker Activity, MITRE-ATT&CK-Übersicht, Session-basierte Investigation-Panels. Siehe [`wazuh/dashboard/`](wazuh/dashboard/).
-
-**B. Detection Engineering** – Verifikation von 110215–110219, Command-Sequenzen und Session-Korrelation, weitere verdächtige Shell-Kommandos, False-Positive-/Noise-Reduktion (z. B. eigene Test-IPs), Severity-Tuning.
-
-**C. Real Attacker Investigation** – Analyse realer Sessions: Source IP, Zeitpunkt, Username, Passwortversuch, Session-ID, Kommandos, Downloads, Dauer, IoCs, ATT&CK-Mapping, Detection Coverage, Analyst Conclusion → professioneller Write-up in [`investigations/`](investigations/).
-
-**D. MITRE ATT&CK Mapping** – beobachtete Aktivität systematisch Techniken zuordnen, nicht nur Regeln.
-
-**E. Dashboard und Screenshots** – anonymisierte Screenshots von Dashboard, Alerts, Regeln, MITRE-Mapping, öffentlichem Cowrie-Listener, Tailscale-only-SSH, Egress-Containment und Pipeline ([`screenshots/`](screenshots/)).
-
-**F. Optionale Erweiterungen** – Vector-natives Protokoll mit Acknowledgements, TLS innerhalb des Tunnels, zusätzliche Alert-Korrelation, GeoIP-/ASN-/Länder-Anreicherung, Threat-Intelligence-Anreicherung, automatisierte IoC-Extraktion, Reporting, weitere Honeypot-Protokolle, sicherer Umgang mit erfassten Samples (nur Hashes/Metadaten, **keine Ausführung von Malware**).
+| Bereich | Stand |
+|---|---|
+| **B. Detection Engineering** | ✔ Regelwerk v2 (7 neue Regeln, 2 korrigierte) auf Basis realer Daten · ✔ Regressionstest-Harness · ⏳ Ausführung der Tests auf dem Home-SIEM |
+| **C. Real Attacker Investigation** | ✔ vier Berichte HP-001 bis HP-004 |
+| **D. MITRE ATT&CK Mapping** | ✔ beobachtete Aktivität → 12 Techniken, Coverage und Lücken ([`docs/mitre-mapping.md`](docs/mitre-mapping.md)) |
+| **Statistik** | ✔ [`docs/attack-statistics.md`](docs/attack-statistics.md) mit Kampagnen K1–K8 |
+| **A. Dashboard „Cowrie Honeypot SOC“** | ◐ 8 Panels vorhanden; Umstellung auf Regelgruppen und neue Panels offen ([`wazuh/dashboard/`](wazuh/dashboard/)) |
+| **E. Screenshots** | ⏳ offen (nur anonymisiert) |
+| **F. Optionale Erweiterungen** | ⏳ Vector-Protokoll mit Acknowledgements, TLS im Tunnel, GeoIP/ASN, Threat-Intel, automatisierte IoC-Extraktion, weitere Protokolle – **keine Ausführung von Malware** |
 
 ## Repository-Struktur
 
@@ -424,13 +435,13 @@ cowrie-honeypot-lab/
 │   ├── firewall/home/               # Home-UFW
 │   └── tailscale/policy.hujson
 ├── wazuh/
-│   ├── rules/                       # cowrie_rules.xml, lab_pipeline_rules.xml
+│   ├── rules/                       # cowrie_rules.xml (v2), lab_pipeline_rules.xml
 │   ├── ossec-localfile.xml
-│   ├── logtest/                     # Regeltests
-│   └── dashboard/                   # Panel-Spezifikation (Phase 2: NDJSON-Export)
+│   ├── logtest/                     # Testfälle + run-tests.sh
+│   └── dashboard/                   # Panel-Spezifikation
 ├── samples/                         # bereinigte Beispiel-Events
 ├── scripts/                         # Health-Check und Segmentierungstest
-├── investigations/                  # Phase 2: Session-Analysen + Vorlage
+├── investigations/                  # HP-001 … HP-004 + Vorlage
 ├── screenshots/                     # nur anonymisierte Screenshots
 └── docs/
     ├── architecture.md
@@ -438,6 +449,9 @@ cowrie-honeypot-lab/
     ├── installation.md
     ├── hardening.md
     ├── validation.md
+    ├── attack-statistics.md         # Phase 2
+    ├── mitre-mapping.md             # Phase 2
+    ├── img/                         # Diagramme der Statistik
     ├── troubleshooting.md
     ├── lessons-learned.md
     ├── timeline.md
@@ -455,7 +469,7 @@ cowrie-honeypot-lab/
 - **Honeypot-Betrieb:** Cowrie (Installation, Konfiguration, Event-Modell)
 - **Threat Modeling & Containment:** Trust Boundaries, Least Privilege, Capabilities, Egress Control
 - **Troubleshooting:** systematische Fehlersuche (Boot-Races, IPv6-only-Sockets, CLI-Inkompatibilitäten)
-- **Incident Analysis** (in Aufbau, Phase 2)
+- **Threat Analysis & Incident Analysis:** Session-Rekonstruktion, Kampagnen-Clustering (Kommandomuster, HASSH), IoC-Aufbereitung, ATT&CK-Mapping, Detection-Coverage-Bewertung
 
 ## Disclaimer / Ethik
 

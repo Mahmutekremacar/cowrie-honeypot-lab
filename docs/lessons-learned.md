@@ -33,3 +33,17 @@
 14. **Bestehende Produktivsysteme nicht nebenbei „härten".** Das pauschale `default deny` auf dem Home-Server wurde bewusst zurückgestellt, bis legitime Quellen inventarisiert sind.
 
 15. **Secrets gehören nicht in Terminals, Chats oder History.** Tailscale-Auth-Key per `read -rsp`, keine Keys oder Passwörter in Logs oder Nachrichten; versehentlich geteilte Werte werden als kompromittiert behandelt und rotiert.
+
+## Aus dem Echtbetrieb (Phase 2)
+
+16. **Die Semantik der Quelle prüfen, nicht den Event-Namen.** `cowrie.session.file_download` klingt eindeutig, deckt bei Cowrie aber auch Dateien ab, die per Shell-Umleitung geschrieben wurden. 772 „Downloads“ waren in Wahrheit null. Erst der Blick in die Rohdaten (`message`, fehlendes `url`-Feld) zeigte den Falsch-Positiv-Fehler.
+
+17. **Was keinen Alert erzeugt, ist unsichtbar.** Eine Basisregel mit `noalert` verschluckt alle Event-Typen, für die keine eigene Kind-Regel existiert, darunter gescheiterte Downloads und Tunnelanfragen. Regelmäßig prüfen: Welche `eventid`s gibt es in den Rohdaten, und welche davon erreichen das SIEM?
+
+18. **Detektionslogik muss zur Sensor-Konfiguration passen.** Eine Brute-Force-Regel auf Fehl-Logins ist sinnlos, wenn der Honeypot 99,7 % der Logins akzeptiert. Die Schwelle der neuen Korrelationsregel wurde deshalb aus den realen Daten simuliert statt geschätzt.
+
+19. **Zahlen gegen Rohdaten plausibilisieren.** Eine naive Zählung über Archiv und `alerts.json` hat den laufenden Tag doppelt gezählt (18.441 statt 15.979). Die Rohdaten sind die Referenz.
+
+20. **Eindämmung zeigt sich im Echtbetrieb.** Die UID-Egress-Sperre war in Phase 1 nur synthetisch getestet. In Phase 2 scheiterten alle realen Payload-Downloads, während die Sperre aktiv war. Ein nicht erreichbarer Staging-Server lässt sich als Ursache nicht völlig ausschließen, aber der Befund passt genau zur erwarteten Wirkung.
+
+21. **HASSH clustert Werkzeuge, nicht Akteure.** Gleiche Client-Fingerprints verbinden Kampagnen technisch, sind aber kein Beweis für denselben Betreiber. Beobachtung und Hypothese bleiben in den Berichten getrennt.

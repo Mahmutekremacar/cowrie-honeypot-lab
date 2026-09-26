@@ -1,6 +1,6 @@
 # Investigations
 
-> **Status: Phase 2 – noch keine abgeschlossene Untersuchung.** Dieser Ordner enthält die Methodik und eine Vorlage. Fertige Berichte werden als `HP-001.md`, `HP-002.md`, … ergänzt.
+> **Status: Phase 2 – vier Untersuchungen abgeschlossen (Datenbasis 23.–26.09.2026).** Kampagnen-Übersicht: [`../docs/attack-statistics.md`](../docs/attack-statistics.md).
 
 ## Ziel
 
@@ -31,9 +31,15 @@ Aus realer Honeypot-Telemetrie nachvollziehbare, professionelle Analyseberichte 
 - Beobachtung und Interpretation klar trennen („beobachtet" vs. „Hypothese").
 - `cowrie.login.success` = von Cowrie akzeptierter Login in die **emulierte** Shell, kein Zugriff auf das echte System.
 
-## Kandidaten aus Phase 1
+## Berichte
 
-| ID | Beschreibung | Status |
-|---|---|---|
-| HP-001 | Externe Quelle `ATTACKER-IP-01`: akzeptierter Login als `root`, Kommando `echo xsec`; eine der beiden aktivsten Quellen | geplant |
-| HP-002 | Zweitaktivste Quelle `ATTACKER-IP-02` | geplant |
+| ID | Kampagne | Titel | Kernbefund |
+|---|---|---|---|
+| [HP-001](HP-001.md) | K5 | GPU-Check, curl-Download und Perl-Ausführung | alle Downloads gescheitert (Egress-Sperre aktiv); neue Regel 110221 |
+| [HP-002](HP-002.md) | K3 | Mehrstufiges Shell-Fingerprinting | verteilte Inventur mit Echtheitsprüfung der Shell; Falsch-Positive bei 110216 behoben |
+| [HP-003](HP-003.md) | K6 | Dropper mit eingebettetem SSH-Private-Key | `scp`-Transfer mit eigenem Key, HTTPS-Fallback in `sh`; neue Regel 110224 |
+| [HP-004](HP-004.md) | K8 | SFTP-Upload eines ELF-Binaries „sshd“ | Upload ohne Shell-Kommando, Binary inert gesichert |
+
+## Anonymisierungsschema
+
+`ATTACKER-IP-xx` (einzelne Quelle, Nummer = Kampagne), `ATTACKER-NET-A…` (/24-Netze), `STAGING-xx` (Payload-Server). URLs sind entschärft (`hxxp://`). SHA-256-Hashes und HASSH-Werte werden als IoCs veröffentlicht.
