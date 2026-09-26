@@ -167,3 +167,41 @@ Nach erneutem Reboot: `ESTAB <HONEYPOT_TAILSCALE_IP>:46050 → <WAZUH_TAILSCALE_
 | `systemctl edit` – Einfügen im Editor unpraktisch | Drop-In direkt per `tee` mit Heredoc anlegen, danach `systemctl daemon-reload` und `systemctl cat` prüfen |
 | `nc` zeigt Port 6514 als `syslog-tls` | nur IANA-Dienstname; kein TLS im Einsatz |
 | Zwei `rule 5402`-Alerts („Successful sudo to ROOT") beim Prüfen der Alerts | normales Verhalten: Wazuh überwacht den Home-Server selbst und erkennt die eigenen `sudo grep`-Befehle |
+
+---
+
+## 10. Regelwerk v2 lädt nicht: `Field 'url' is static`
+
+**Symptom:** Alle 15 Regressionstests meldeten „kein Treffer“. Die Einzelprüfung zeigte die Ursache:
+
+```text
+$ sudo /var/ossec/bin/wazuh-analysisd -t
+wazuh-analysisd: ERROR: Failure to read rule 110216. Field 'url' is static.
+wazuh-analysisd: CRITICAL: (1220): Error loading the rules: 'etc/rules/cowrie_rules.xml'.
+```
+
+**Ursache:** Wazuh kennt statische Felder (u. a. `srcip`, `dstip`, `user`, `id`, `url`, `data`, `status`). Der JSON-Decoder legt ein JSON-Feld mit diesem Namen dort ab. Solche Felder dürfen in Regeln nicht mit `<field name="…">` abgefragt werden, sondern nur über das gleichnamige Element.
+
+**Lösung:** In Regel 110216 `<field name="url" type="pcre2">\S</field>` durch `<url type="pcre2">\S</url>` ersetzt.
+
+**Lessons Learned:** Vor jedem Neustart `wazuh-analysisd -t` ausführen. Eine fehlerhafte Regeldatei stört den laufenden Manager nicht, verhindert aber seinen nächsten Start. Das Python-Modell der Regelauswertung konnte diesen Fehler nicht finden, weil es Wazuhs Parser-Regeln nicht kennt. Deshalb ist der Test mit dem echten Regelwerk Pflicht.
+
+---
+
+## 11. Regel 110223 greift nicht: `&amp;` im Muster
+
+**Symptom:** Nach der Korrektur aus Abschnitt 10 bestanden 14 von 15 Tests. Die Einzelprüfung des Testevents für 110223 (`(wget … || curl …) | sh -s ssh`) ergab stattdessen:
+
+```text
+**Phase 3: Completed filtering (rules).
+        id: '110215'
+        level: '8'
+```
+
+**Ursache:** Das PCRE2-Muster enthielt die Zeichenklasse `[^;&amp;]`, also die XML-Schreibweise für `&`. Wazuhs Regel-Parser übersetzt diese Entität offenbar nicht zurück. Die Klasse schloss damit auch die Buchstaben `a`, `m` und `p` aus. Weil fast jede URL ein `a` enthält, passte das Muster praktisch nie. Die spezifischere Kind-Regel fiel aus, und die allgemeinere 110215 griff.
+
+**Lösung:** `&` als Hex-Escape schreiben: `[^;\x26]`. Danach: **15/15 bestanden**.
+
+**Zusätzlich im Test-Harness korrigiert:** `wazuh-logtest` schreibt seine Auswertung auf **stderr**. Die Fehlerdiagnose in `run-tests.sh` hatte stderr verworfen und deshalb „kein Treffer“ statt `110215` angezeigt.
+
+**Lessons Learned:** In Wazuh-Regeln keine XML-Entitäten in Mustern verwenden. Sonderzeichen wie `&`, `<`, `>` in PCRE2 als `\x26`, `\x3c`, `\x3e` schreiben.

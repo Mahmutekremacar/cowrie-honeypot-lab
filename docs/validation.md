@@ -164,12 +164,12 @@ GOOD
 | Keine Weiterleitung | 108 `direct-tcpip`-Anfragen, alle als „discarded“ protokolliert |
 | Pipeline-Stabilität | 128.810 Events vom VPS am Home-Server angekommen, Vector-Verbindung über Tailscale stabil |
 | Regelwerk v1 | Trefferzahlen je Regel ermittelt; Fehler in 110216 und 110219 gefunden ([`../wazuh/logtest/README.md`](../wazuh/logtest/README.md)) |
-| Regelwerk v2 | Modell-Simulation 15/15 Testfälle; Test mit echtem Wazuh über `run-tests.sh` **offen** |
+| Regelwerk v2 | 15/15 Testfälle mit echtem Wazuh (`run-tests.sh`), `wazuh-analysisd -t` fehlerfrei, Manager mit v2 `active` (26.09.2026) |
 
 ## 8. Nicht (oder nicht isoliert) getestet
 
 - Home-UFW und `permit_origin` bei gelockerter Tailscale-Policy
-- Regelwerk v2 mit dem echten Wazuh-Regelwerk (Harness vorhanden) sowie die Korrelationsregel 110219
+- Korrelationsregel 110219 (frequency) mit dem echten Regelwerk
 - Verhalten des Disk-Buffers bei längerem Ausfall des Home-Servers
 - Log-Rotation von `cowrie.json`
 - Reboot des Home-Servers (Receiver-Bind an Tailscale-IP)

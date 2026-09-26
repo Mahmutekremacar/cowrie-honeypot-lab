@@ -14,7 +14,7 @@ while IFS=$'\t' read -r rid lvl event; do
   if printf '%s\n' "$event" | "$LOGTEST" -q -U "${rid}:${lvl}:json" >/dev/null 2>&1; then
     echo "PASS  ${rid} (level ${lvl})"; pass=$((pass+1))
   else
-    got=$(printf '%s\n' "$event" | "$LOGTEST" 2>/dev/null | grep -oE "id: '[0-9]+'" | tail -1)
+    got=$(printf '%s\n' "$event" | "$LOGTEST" 2>&1 | grep -oE "^[[:space:]]*id: '[0-9]+'" | tail -1 | tr -d '[:space:]')
     echo "FAIL  ${rid} (level ${lvl}) – tatsächlich: ${got:-kein Treffer}"; fail=$((fail+1))
   fi
 done < "$FILE"

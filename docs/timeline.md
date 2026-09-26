@@ -55,8 +55,11 @@ Legende: **Geplant** · **Getestet** · **Fehlgeschlagen** · **Korrigiert** · 
 | 26.09. | Rohdaten (128.810 Events) und Alert-Archive exportiert; Regelzählung zunächst durch doppelt gezählte Tagesdatei verfälscht | Korrigiert |
 | 26.09. | Auswertung: 15.967 Verbindungen, 251 Quellen, Kampagnen K1–K8 | Final verifiziert |
 | 26.09. | Befund: 110216 zählte 772 Shell-Umleitungen als Downloads; gescheiterte Downloads ohne Alert; 110219 wirkungslos | Fehlgeschlagen (Regelwerk v1) |
-| 26.09. | Regelwerk v2 (110216/110219 korrigiert, 110220–110226 neu), Simulation gegen Rohdaten, 15 Testfälle | Getestet (Modell) – Test mit echtem Wazuh offen |
+| 26.09. | Regelwerk v2 (110216/110219 korrigiert, 110220–110226 neu), Simulation gegen Rohdaten, 15 Testfälle | Getestet (Modell) |
 | 26.09. | Untersuchungen HP-001 bis HP-004, ATT&CK-Mapping, Statistik | Final verifiziert |
+| 26.09. | Test mit echtem Wazuh: Regelwerk lädt nicht (`Field 'url' is static`) | Fehlgeschlagen → Korrigiert |
+| 26.09. | 14/15: 110223 greift nicht (XML-Entität `&amp;` im Muster) | Fehlgeschlagen → Korrigiert |
+| 26.09. | 15/15 bestanden, `wazuh-analysisd -t` fehlerfrei, Manager mit v2 neu gestartet | Final verifiziert |
 | — | Unique IPs, Event Types, Payload-/MITRE-Panels, Screenshots | Geplant |
 
 ## Endzustand je Komponente

@@ -23,7 +23,7 @@ Spezifikation: [`../wazuh/dashboard/README.md`](../wazuh/dashboard/README.md)
 - [x] neue Regeln: Tunnel/Proxy (110222), Download-an-Shell (110223), eingebetteter Private Key (110224), `chmod +x` (110225), System Discovery (110226)
 - [x] 110219 neu definiert (alle Login-Versuche statt nur Fehl-Logins, Schwelle 20/5 min anhand realer Daten gewählt)
 - [x] Untergruppen für Dashboards, Regressionstest-Harness mit 15 Testfällen
-- [ ] **Tests mit dem echten Regelwerk ausführen** (`wazuh/logtest/run-tests.sh`) und Ergebnis dokumentieren
+- [x] Tests mit dem echten Regelwerk: 15/15 bestanden, Regelwerk v2 in Betrieb (zwei Parser-Fehler dabei gefunden und behoben)
 - [ ] 110219 manuell testen (frequency-Regel)
 - [ ] Lücken aus [`mitre-mapping.md`](mitre-mapping.md#3-lücken-und-backlog): Spurenbeseitigung (T1070.004), Tarnnamen bei Uploads (T1036.005), `last` (T1033), K3-Signatur
 - [ ] Entscheidung zur Cowrie-Benutzerdatenbank dokumentieren (aktuell 99,7 % akzeptierte Logins: maximale Kommando-Sichtbarkeit vs. realistisches Brute-Force-Bild)

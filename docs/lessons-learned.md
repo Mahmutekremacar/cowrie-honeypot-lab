@@ -47,3 +47,5 @@
 20. **Eindämmung zeigt sich im Echtbetrieb.** Die UID-Egress-Sperre war in Phase 1 nur synthetisch getestet. In Phase 2 scheiterten alle realen Payload-Downloads, während die Sperre aktiv war. Ein nicht erreichbarer Staging-Server lässt sich als Ursache nicht völlig ausschließen, aber der Befund passt genau zur erwarteten Wirkung.
 
 21. **HASSH clustert Werkzeuge, nicht Akteure.** Gleiche Client-Fingerprints verbinden Kampagnen technisch, sind aber kein Beweis für denselben Betreiber. Beobachtung und Hypothese bleiben in den Berichten getrennt.
+
+22. **Ein Modell ersetzt nicht den echten Parser.** Die Python-Simulation bestand 15/15. Der echte Wazuh-Parser fand trotzdem zwei Fehler: ein statisches Feld (`url`) und eine nicht dekodierte XML-Entität (`&amp;`). Die Simulation war nützlich, um die Wirkung auf 128.000 Events abzuschätzen. Freigeben darf nur der Test gegen das echte Regelwerk, zusammen mit `wazuh-analysisd -t`.

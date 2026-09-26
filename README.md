@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Status** | Phase 1 (Infrastruktur) abgeschlossen und verifiziert · Phase 2: Regelwerk v2, vier Untersuchungen und ATT&CK-Mapping erstellt; Dashboard und Screenshots in Arbeit |
+| **Status** | Phase 1 (Infrastruktur) abgeschlossen und verifiziert · Phase 2: Regelwerk v2 getestet (15/15) und in Betrieb, vier Untersuchungen, ATT&CK-Mapping; Dashboard und Screenshots in Arbeit |
 | **Zeitraum Phase 1** | 23.09.2026 (Aufbau, Tests, Live-Schaltung, Reboot-Acceptance-Test) |
 | **Stack** | Ubuntu 24.04.5 LTS · Cowrie 3.0.15 · Vector 0.58.0 · Tailscale 1.102.4 · Wazuh 4.14.7 · UFW/iptables · systemd |
 
@@ -283,7 +283,7 @@ Version 1 entstand in Phase 1. Version 2 ist das Ergebnis des Detection Tunings 
 
 ¹ Die einzige passende Session (HP-003) wird von der spezifischeren Regel 110224 übernommen.
 
-> **Status v2:** Die Regeln sind gegen die realen Daten simuliert (Python-Modell der Wazuh-Regelauswertung). Die Bestätigung mit dem echten Wazuh-Regelwerk erfolgt über `wazuh/logtest/run-tests.sh` (15 Testfälle) auf dem Home-SIEM.
+> **Status v2 (26.09.2026):** Mit dem echten Wazuh-Regelwerk **15/15 Testfälle bestanden** (`wazuh/logtest/run-tests.sh`); `wazuh-analysisd -t` fehlerfrei; Manager mit Regelwerk v2 in Betrieb. Die Trefferzahlen stammen aus einer Simulation über die Rohdaten. Zwei Fehler hat erst der echte Parser gefunden (statisches Feld `url`, XML-Entität im Muster), siehe [`docs/troubleshooting.md`](docs/troubleshooting.md#10-regelwerk-v2-lädt-nicht-field-url-is-static).
 
 **Designentscheidungen:**
 
@@ -315,7 +315,7 @@ Version 1 entstand in Phase 1. Version 2 ist das Ergebnis des Detection Tunings 
 | Gezielte ACLs statt globaler Leserechte | Vector liest nur die Logs | Verifiziert (Events kommen an) |
 | Vector-Disk-Buffer 512 MiB | Überbrückung von Receiver-Ausfällen (keine Zustellgarantie) | Konfiguriert |
 | Vector-Start erst bei Tailscale-Route | Boot-Race verhindern | Verifiziert (Reboot) |
-| Wazuh Custom Rules 110210–110226 (v2) | Klassifikation der Honeypot-Aktivität | v1 live verifiziert; v2 simuliert, Logtest-Harness vorhanden |
+| Wazuh Custom Rules 110210–110226 (v2) | Klassifikation der Honeypot-Aktivität | v1 live verifiziert; v2: 15/15 Regressionstests mit echtem Wazuh, in Betrieb |
 | MITRE-ATT&CK-Mapping | Einordnung beobachteter Aktivität | 6 beobachtete Techniken vollständig, 2 teilweise abgedeckt; Lücken dokumentiert ([`docs/mitre-mapping.md`](docs/mitre-mapping.md)) |
 
 ## Validierung / Tests
@@ -390,6 +390,8 @@ Ausführlich: [`docs/troubleshooting.md`](docs/troubleshooting.md) und [`docs/le
 | DQL-Fehler im Visualize-Editor | Query-Parser lehnte `rule.id:110211` ab | *Add filter* bei leerer Query |
 | Befehle auf dem falschen Host ausgeführt | ähnliche Prompts/uneindeutige Hostnamen | Prompt vor jedem Schritt prüfen; Hostnamen eindeutig benennen |
 | 772 „Downloads“ ohne einen echten Download | Cowrie loggt Shell-Umleitungen als `file_download` | Regel 110216 prüft `url`, neue Regel 110220 |
+| Regelwerk v2 lädt nicht: `Field 'url' is static` | `url` ist ein statisches Wazuh-Feld | `<url>` statt `<field name="url">` |
+| 110223 greift nicht | XML-Entität `&amp;` im PCRE2-Muster wird nicht dekodiert | `\x26` statt `&amp;` |
 | Regelzählung zu hoch (18.441 statt 15.979) | aktuelle Tagesdatei doppelt gezählt (Archiv + `alerts.json`) | Zählungen gegen Rohdaten plausibilisieren |
 
 ## Bekannte Einschränkungen
@@ -412,7 +414,7 @@ Ehrlich dokumentierte offene Punkte (nicht Teil der verifizierten Phase-1-Aussag
 
 | Bereich | Stand |
 |---|---|
-| **B. Detection Engineering** | ✔ Regelwerk v2 (7 neue Regeln, 2 korrigierte) auf Basis realer Daten · ✔ Regressionstest-Harness · ⏳ Ausführung der Tests auf dem Home-SIEM |
+| **B. Detection Engineering** | ✔ Regelwerk v2 (7 neue Regeln, 2 korrigierte) auf Basis realer Daten · ✔ Regressionstests 15/15 mit echtem Wazuh · ✔ in Betrieb |
 | **C. Real Attacker Investigation** | ✔ vier Berichte HP-001 bis HP-004 |
 | **D. MITRE ATT&CK Mapping** | ✔ beobachtete Aktivität → 12 Techniken, Coverage und Lücken ([`docs/mitre-mapping.md`](docs/mitre-mapping.md)) |
 | **Statistik** | ✔ [`docs/attack-statistics.md`](docs/attack-statistics.md) mit Kampagnen K1–K8 |

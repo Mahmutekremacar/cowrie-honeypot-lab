@@ -10,7 +10,7 @@ Auf dem Home-SIEM, nachdem `cowrie_rules.xml` nach `/var/ossec/etc/rules/` kopie
 sudo bash wazuh/logtest/run-tests.sh
 ```
 
-Das Skript schickt jedes Event aus [`test-events.tsv`](test-events.tsv) einzeln durch den Unit-Test-Modus von `wazuh-logtest` (`-U <rule_id>:<level>:json`) und meldet `PASS`/`FAIL`. Bei einem Fehlschlag zeigt es die tatsächlich ausgelöste Regel-ID. Melden alle Tests `FAIL`, obwohl die angezeigte ID jeweils der erwarteten entspricht, unterstützt die installierte Version den Schalter `-U` nicht. Dann gilt der Vergleich der angezeigten IDs.
+Das Skript schickt jedes Event aus [`test-events.tsv`](test-events.tsv) einzeln durch den Unit-Test-Modus von `wazuh-logtest` (`-U <rule_id>:<level>:json`) und meldet `PASS`/`FAIL`. Bei einem Fehlschlag zeigt es die tatsächlich ausgelöste Regel-ID. Melden **alle** Tests `FAIL` mit „kein Treffer“, lädt das Regelwerk meist gar nicht. Dann zuerst `sudo /var/ossec/bin/wazuh-analysisd -t` ausführen.
 
 Erwartete Ausgabe:
 
@@ -36,6 +36,30 @@ Bestanden: 15  Fehlgeschlagen: 0
 Die Testevents sind **strukturell identisch mit realen Cowrie-Events** aus der Auswertung vom 23.–26.09.2026, aber synthetisch: Quell-IPs aus `203.0.113.0/24` (RFC 5737), URLs auf `example.invalid`, Schlüssel und Passwörter entfernt.
 
 **Nicht enthalten:** die Korrelationsregel 110219 (`frequency`). Manuell testen: `wazuh-logtest` starten und 20 Zeilen `cowrie.login.success` mit derselben `src_ip` nacheinander einfügen. Ab dem 20. Event sollte 110219 auslösen.
+
+**Ergebnis mit dem echten Regelwerk (Home-SIEM, Wazuh 4.14.7, 26.09.2026):**
+
+```text
+PASS  110211 (level 3)
+PASS  110212 (level 4)
+PASS  110213 (level 7)
+PASS  110214 (level 5)
+PASS  110226 (level 4)
+PASS  110215 (level 8)
+PASS  110223 (level 10)
+PASS  110224 (level 10)
+PASS  110225 (level 6)
+PASS  110218 (level 4)
+PASS  110220 (level 5)
+PASS  110216 (level 10)
+PASS  110221 (level 8)
+PASS  110217 (level 10)
+PASS  110222 (level 6)
+----
+Bestanden: 15  Fehlgeschlagen: 0
+```
+
+Die ersten beiden Läufe fanden zwei Fehler, die das Python-Modell nicht erkennen konnte: das statische Feld `url` und die XML-Entität `&amp;` (siehe [`docs/troubleshooting.md`](../../docs/troubleshooting.md#10-regelwerk-v2-lädt-nicht-field-url-is-static), Abschnitte 10 und 11). Vor jedem Neustart zusätzlich `sudo /var/ossec/bin/wazuh-analysisd -t` ausführen.
 
 **Vorab-Validierung:** Vor der Übergabe wurde das Regelwerk mit einem Python-Modell der Wazuh-Auswertung (erste passende Kind-Regel gewinnt) gegen alle 15 Testfälle (15/15) und gegen die 128.810 realen Events simuliert. Die Trefferzahlen stehen im [README](../../README.md#detection-engineering). Das Modell ersetzt den Test mit dem echten Wazuh-Regelwerk **nicht**. Maßgeblich ist `run-tests.sh`.
 

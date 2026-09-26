@@ -90,7 +90,7 @@
   <!-- Download direkt in eine Shell gepipt -->
   <rule id="110223" level="10">
     <if_sid>110214</if_sid>
-    <field name="input" type="pcre2">(?i)\b(wget|curl)\b[^;&amp;]*\|\s*(ba|da|z)?sh\b</field>
+    <field name="input" type="pcre2">(?i)\b(wget|curl)\b[^;\x26]*\|\s*(ba|da|z)?sh\b</field>
     <description>Cowrie: Download piped to shell by $(src_ip): $(input)</description>
     <mitre>
       <id>T1105</id>
@@ -141,11 +141,13 @@
 
   <!-- ===================== Dateien ===================== -->
 
-  <!-- Echter Download: nur Events MIT URL -->
+  <!-- Echter Download: nur Events MIT URL.
+       "url" ist in Wazuh ein STATISCHES Feld -> <url> statt <field name="url"> verwenden
+       (sonst: "Failure to read rule 110216. Field 'url' is static.") -->
   <rule id="110216" level="10">
     <if_sid>110210</if_sid>
     <field name="eventid" type="pcre2">^cowrie\.session\.file_download$</field>
-    <field name="url" type="pcre2">\S</field>
+    <url type="pcre2">\S</url>
     <description>Cowrie: File downloaded into honeypot from $(url), SHA256 $(shasum)</description>
     <mitre>
       <id>T1105</id>
